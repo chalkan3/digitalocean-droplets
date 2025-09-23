@@ -1,0 +1,66 @@
+config:
+  digitalocean:region: nyc3
+  digitalocean-droplets:vpc-stack-name: organization/digitalocean-hub-spoke-vpc/dev # Replace with your VPC stack reference
+  digitalocean-droplets:droplet-region: nyc3
+  digitalocean-droplets:droplets: |
+    - name: salt-minion-droplet
+      size: s-1vcpu-1gb
+      image: ubuntu-22-04-x64
+      vpc-name: spoke-vpc-1 # Ensure this matches a VPC name in your referenced VPC stack
+      tags:
+        - salt-minion
+        - dev
+      salt-enabled: true
+      salt-master-ip: 192.0.2.10 # Replace with your Salt Master IP
+      salt-grains:
+        roles:
+          - web-server
+        environment: development
+      ingress-rules:
+        - protocol: tcp
+          port-range: "22"
+          sources:
+            addresses:
+              - 0.0.0.0/0
+        - protocol: tcp
+          port-range: "80"
+          sources:
+            addresses:
+              - 0.0.0.0/0
+      egress-rules:
+        - protocol: tcp
+          port-range: "all"
+          destinations:
+            addresses:
+              - 0.0.0.0/0
+    - name: plain-droplet
+      size: s-1vcpu-1gb
+      image: ubuntu-22-04-x64
+      vpc-name: spoke-vpc-2 # Ensure this matches a VPC name in your referenced VPC stack
+      tags:
+        - plain-vm
+        - dev
+      salt-enabled: false
+      droplet-bootstrap-script: |
+        #!/bin/bash
+        echo "Hello from a plain droplet!" > /tmp/hello.txt
+        apt-get update -y
+        apt-get install -y nginx
+        systemctl start nginx
+      ingress-rules:
+        - protocol: tcp
+          port-range: "22"
+          sources:
+            addresses:
+              - 0.0.0.0/0
+        - protocol: tcp
+          port-range: "80"
+          sources:
+            addresses:
+              - 0.0.0.0/0
+      egress-rules:
+        - protocol: tcp
+          port-range: "all"
+          destinations:
+            addresses:
+              - 0.0.0.0/0

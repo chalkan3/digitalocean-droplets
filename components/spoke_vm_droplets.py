@@ -1,12 +1,14 @@
 import pulumi
 import pulumi_digitalocean as digitalocean
 from typing import List, Dict
-from components.config_types import DropletConfig
+from components.config_types import DropletConfig, IngressRule, EgressRule, SaltGrainsConfig
+from components.salt_bootstrap import generate_salt_bootstrap_script
 
 class SpokeVMDroplets(pulumi.ComponentResource):
     """
     A Pulumi component that provisions multiple DigitalOcean Droplets
-    within existing Spoke VPCs, referencing the VPCs from another stack.
+    within existing Spoke VPCs, referencing the VPCs from another stack,
+    with conditional bootstrap and firewall management.
     """
 
     def __init__(self,
@@ -19,35 +21,29 @@ class SpokeVMDroplets(pulumi.ComponentResource):
 
         self.droplet_ids = []
         self.droplet_ips = []
+        self.firewall_ids = []
 
-        # Get the outputs from the referenced VPC stack
-        # We expect spoke_vpc_ids to be a list of dictionaries, where each dict contains 'id' and 'name'
-        # For simplicity, we'll assume spoke_vpc_ids_output is a list of VPC IDs and we'll need to map them to names.
-        # A more robust solution would be to export a map from VPC names to IDs from the VPC stack.
-        # For this example, we'll assume the VPC stack exports a list of VPC IDs and we'll try to match by name.
-
-        # A more robust way to get VPC IDs by name would be if the VPC stack exported a map like:
-        # pulumi.export("spoke_vpcs_map", {"my-spoke-vpc-1": spoke_vpc_1.id, ...})
-        # For now, we'll rely on the user to provide correct vpc_name that matches an existing VPC.
-
-        # Let's assume the vpc_stack_reference provides a map of vpc_name to vpc_id
-        # If the VPC stack exports a list of IDs, we'd need to iterate and match.
-        # For this example, we'll assume the VPC stack exports a dictionary mapping VPC names to their IDs.
-        # If the VPC stack only exports a list of IDs, we would need to adjust this logic.
-
-        # For the purpose of this example, let's assume the VPC stack exports a dictionary
-        # where keys are VPC names and values are VPC IDs.
-        # Example: {"my-spoke-vpc-new": "vpc-id-123", "another-spoke": "vpc-id-456"}
         spoke_vpcs_map = vpc_stack_reference.get_output("spoke_vpcs_map")
 
         for i, droplet_config in enumerate(droplets):
-            # Get the VPC ID for the specified VPC name from the referenced stack's outputs
-            # We use apply to handle the Output<Dict> type from StackReference
             vpc_id = spoke_vpcs_map.apply(lambda vpcs: vpcs.get(droplet_config.vpc_name))
 
             if vpc_id is None:
                 pulumi.log.warn(f"VPC with name {droplet_config.vpc_name} not found in referenced VPC stack. Skipping droplet {droplet_config.name}.")
                 continue
+
+            user_data_script = None
+            if droplet_config.salt_enabled:
+                if not droplet_config.salt_master_ip:
+                    pulumi.log.error(f"Salt master IP is required for Salt-enabled droplet {droplet_config.name}")
+                    continue
+                user_data_script = generate_salt_bootstrap_script(
+                    droplet_name=droplet_config.name,
+                    salt_master_ip=droplet_config.salt_master_ip,
+                    salt_grains=droplet_config.salt_grains
+                )
+            elif droplet_config.droplet_bootstrap_script:
+                user_data_script = droplet_config.droplet_bootstrap_script
 
             droplet = digitalocean.Droplet(
                 f"{name}-{droplet_config.name}",
@@ -55,15 +51,51 @@ class SpokeVMDroplets(pulumi.ComponentResource):
                 size=droplet_config.size,
                 image=droplet_config.image,
                 region=droplet_region,
-                vpc_uuid=vpc_id,  # Assign droplet to the specific VPC
+                vpc_uuid=vpc_id,
                 tags=droplet_config.tags,
+                user_data=user_data_script,
                 opts=pulumi.ResourceOptions(parent=self)
             )
             self.droplet_ids.append(droplet.id)
             self.droplet_ips.append(droplet.ipv4_address)
 
+            # Create Firewall for the Droplet
+            if droplet_config.ingress_rules or droplet_config.egress_rules:
+                ingress = []
+                for rule in droplet_config.ingress_rules:
+                    ingress.append(digitalocean.FirewallIngressRuleArgs(
+                        protocol=rule.protocol,
+                        port_range=rule.port_range,
+                        source_addresses=rule.sources.get("addresses"),
+                        source_kubernetes_ids=rule.sources.get("kubernetes_ids"),
+                        source_load_balancer_uids=rule.sources.get("load_balancer_uids"),
+                        source_tags=rule.sources.get("tags"),
+                    ))
+
+                egress = []
+                for rule in droplet_config.egress_rules:
+                    egress.append(digitalocean.FirewallEgressRuleArgs(
+                        protocol=rule.protocol,
+                        port_range=rule.port_range,
+                        destination_addresses=rule.destinations.get("addresses"),
+                        destination_kubernetes_ids=rule.destinations.get("kubernetes_ids"),
+                        destination_load_balancer_uids=rule.destinations.get("load_balancer_uids"),
+                        destination_tags=rule.destinations.get("tags"),
+                    ))
+
+                firewall = digitalocean.Firewall(
+                    f"{name}-{droplet_config.name}-firewall",
+                    name=f"{droplet_config.name}-firewall",
+                    droplet_ids=[droplet.id],
+                    inbound_rules=ingress,
+                    outbound_rules=egress,
+                    opts=pulumi.ResourceOptions(parent=droplet)
+                )
+                self.firewall_ids.append(firewall.id)
+
         # Register outputs
         self.register_outputs({
             "droplet_ids": pulumi.Output.all(*self.droplet_ids),
             "droplet_ips": pulumi.Output.all(*self.droplet_ips),
+            "firewall_ids": pulumi.Output.all(*self.firewall_ids),
         })
