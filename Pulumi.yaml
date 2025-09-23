@@ -1,0 +1,3 @@
+name: digitalocean-droplets
+runtime: python
+description: A Pulumi project to provision DigitalOcean Droplets within existing Spoke VPCs.
