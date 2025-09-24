@@ -1,0 +1,48 @@
+config:
+  digitalocean-droplets:vpc-stack-name: organization/digitalocean-hub-spoke-vpc/production
+  digitalocean-droplets:droplet-region: nyc3
+  digitalocean-droplets:droplets:
+    - name: do-workload-01
+      size: s-2vcpu-4gb-intel
+      image: ubuntu-22-04-x64
+      vpc-name: production-spoke
+      tags:
+        - workload
+        - managed-by-saltstack
+        - production
+        - managed-by-pulumi
+        - gitlab
+      volume_size_gb: 50
+      salt-enabled: true
+      salt-master-ip: 167.172.27.204
+      salt-grains:
+        roles:
+          - production
+          - digitalocean
+          - workloads
+        host-image: ubuntu-22-04-x64
+        vpc-name: production-spoke
+        managed-by: pulumi
+        machine-size: s-1vcpu-1gb
+        datacenter: digitalocean
+        datacenter-region: nyc3
+      ingress-rules:
+        - protocol: tcp
+          port-range: "22"
+          sources:
+            addresses:
+              - 0.0.0.0/0
+        - protocol: tcp
+          port-range: "80"
+          sources:
+            addresses:
+              - 0.0.0.0/0
+      egress-rules:
+        - protocol: tcp
+          port-range: "all"
+          destinations:
+            addresses:
+              - 0.0.0.0/0
+  digitalocean:token:
+    secure: v1:z6HW1y2DVyzGUCeG:OcmRYYcjkqVfcauxTsO5hF3UWBcAZHTeKB2hQ5NHts6Y7vo4BFd9n3HMOhw2txkH6AwDZN3w+hmaKLqYu//saNN0JnzdziLwWnAQdmmIFtQM36Pqs3RE
+encryptionsalt: v1:/yK3wfxOX28=:v1:8OxrvcT8UoQAviRJ:mHd69YJ3gFduURcmxERtRvdcOnDRyg==

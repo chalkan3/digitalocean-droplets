@@ -19,9 +19,10 @@ class SpokeVMDroplets(pulumi.ComponentResource):
                  opts: pulumi.ResourceOptions = None):
         super().__init__("custom:compute:SpokeVMDroplets", name, {}, opts)
 
-        self.droplet_ids = []
         self.droplet_ips = []
         self.firewall_ids = []
+        self.volume_ids = []
+        self.volume_device_paths = []
 
         spoke_vpcs_map = vpc_stack_reference.get_output("spoke_vpcs_map")
 
@@ -56,14 +57,34 @@ class SpokeVMDroplets(pulumi.ComponentResource):
                 user_data=user_data_script,
                 opts=pulumi.ResourceOptions(parent=self)
             )
-            self.droplet_ids.append(droplet.id)
             self.droplet_ips.append(droplet.ipv4_address)
+
+            # Create Volume and attach it if volume_size_gb is specified
+            if droplet_config.volume_size_gb:
+                pulumi.log.info(f"Creating volume for {droplet_config.name} with size {droplet_config.volume_size_gb}GB") # Add this line
+                volume = digitalocean.Volume(
+                    f"{name}-{droplet_config.name}-volume",
+                    region=droplet_region,
+                    size=droplet_config.volume_size_gb,
+                    initial_filesystem_type="ext4", # Default filesystem type
+                    description=f"Volume for {droplet_config.name}",
+                    opts=pulumi.ResourceOptions(parent=droplet)
+                )
+                digitalocean.VolumeAttachment(
+                    f"{name}-{droplet_config.name}-volume-attachment",
+                    droplet_id=droplet.id,
+                    volume_id=volume.id,
+                    opts=pulumi.ResourceOptions(parent=volume)
+                )
+                self.volume_ids.append(volume.id)
+                self.volume_device_paths.append(pulumi.Output.concat("/dev/disk/by-id/scsi-0DO_Volume_", volume.name))
+
 
             # Create Firewall for the Droplet
             if droplet_config.ingress_rules or droplet_config.egress_rules:
                 ingress = []
                 for rule in droplet_config.ingress_rules:
-                    ingress.append(digitalocean.FirewallIngressRuleArgs(
+                    ingress.append(digitalocean.FirewallInboundRuleArgs(
                         protocol=rule.protocol,
                         port_range=rule.port_range,
                         source_addresses=rule.sources.get("addresses"),
@@ -74,7 +95,7 @@ class SpokeVMDroplets(pulumi.ComponentResource):
 
                 egress = []
                 for rule in droplet_config.egress_rules:
-                    egress.append(digitalocean.FirewallEgressRuleArgs(
+                    egress.append(digitalocean.FirewallOutboundRuleArgs(
                         protocol=rule.protocol,
                         port_range=rule.port_range,
                         destination_addresses=rule.destinations.get("addresses"),
@@ -95,7 +116,8 @@ class SpokeVMDroplets(pulumi.ComponentResource):
 
         # Register outputs
         self.register_outputs({
-            "droplet_ids": pulumi.Output.all(*self.droplet_ids),
             "droplet_ips": pulumi.Output.all(*self.droplet_ips),
             "firewall_ids": pulumi.Output.all(*self.firewall_ids),
+            "volume_ids": pulumi.Output.all(*self.volume_ids),
+            "volume_device_paths": pulumi.Output.all(*self.volume_device_paths),
         })

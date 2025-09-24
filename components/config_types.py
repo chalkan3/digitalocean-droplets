@@ -8,6 +8,12 @@ class SaltGrainsConfig:
     """
     roles: List[str] = field(default_factory=list)
     environment: Optional[str] = None
+    host_image: Optional[str] = None
+    vpc_name: Optional[str] = None
+    managed_by: Optional[str] = None
+    machine_size: Optional[str] = None
+    datacenter: Optional[str] = None
+    datacenter_region: Optional[str] = None
 
 @dataclass
 class SaltConfig:
@@ -49,5 +55,6 @@ class DropletConfig:
     salt_master_ip: Optional[str] = None
     salt_grains: Optional[SaltGrainsConfig] = None
     droplet_bootstrap_script: Optional[str] = None
+    volume_size_gb: Optional[int] = None
     ingress_rules: Optional[List[IngressRule]] = field(default_factory=list)
     egress_rules: Optional[List[EgressRule]] = field(default_factory=list)

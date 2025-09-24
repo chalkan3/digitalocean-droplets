@@ -51,7 +51,8 @@ for droplet_raw in droplets_config_raw:
         salt_enabled=droplet_processed.get("salt_enabled", False),
         salt_master_ip=droplet_processed.get("salt_master_ip"),
         salt_grains=salt_grains_config,
-        droplet_bootstrap_script=droplet_processed.get("droplet_bootstrap_script"),
+        droplet_bootstrap_script=None, # Ensure bootstrap script is not used
+        volume_size_gb=droplet_processed.get("volume_size_gb"),
         ingress_rules=ingress_rules_config,
         egress_rules=egress_rules_config,
     ))
@@ -64,10 +65,11 @@ spoke_vm_droplets = SpokeVMDroplets(
     "spoke-vm-droplets",
     droplet_region=droplet_region,
     droplets=droplets,
-    vpc_stack_reference=vpc_stack_ref
+    vpc_stack_reference=vpc_stack_ref,
 )
 
 # Export outputs
-pulumi.export("droplet_ids", spoke_vm_droplets.droplet_ids)
 pulumi.export("droplet_ips", spoke_vm_droplets.droplet_ips)
 pulumi.export("firewall_ids", spoke_vm_droplets.firewall_ids)
+pulumi.export("volume_ids", spoke_vm_droplets.volume_ids)
+pulumi.export("volume_device_paths", spoke_vm_droplets.volume_device_paths)

@@ -1,0 +1,48 @@
+config:
+  digitalocean-droplets:vpc-stack-name: organization/digitalocean-hub-spoke-vpc/production
+  digitalocean-droplets:droplet-region: nyc3
+  digitalocean-droplets:droplets:
+    - name: frps-proxy-salt-master
+      size: s-1vcpu-1gb
+      image: ubuntu-22-04-x64
+      vpc-name: production-spoke
+      tags:
+        - proxy
+        - frp
+        - production
+      salt-enabled: false
+      ingress-rules:
+        - protocol: tcp
+          port-range: "22"
+          sources:
+            addresses:
+              - 0.0.0.0/0
+        - protocol: tcp
+          port-range: "80"
+          sources:
+            addresses:
+              - 0.0.0.0/0
+        - protocol: tcp
+          port-range: "4505"
+          sources:
+            addresses:
+              - 0.0.0.0/0
+        - protocol: tcp
+          port-range: "4506"
+          sources:
+            addresses:
+              - 0.0.0.0/0
+        - protocol: tcp
+          port-range: "7000"
+          sources:
+            addresses:
+              - 0.0.0.0/0
+      egress-rules:
+        - protocol: tcp
+          port-range: "all"
+          destinations:
+            addresses:
+              - 0.0.0.0/0
+  digitalocean:token:
+    secure: v1:R/ImqsOQAWKTb9xW:WPPB8tZ0q3D/u5AtK+deNJHb8pEUNPJv/PpHnjWeARKUD4Y1nKwPFG8QBLkyIywj+pY+4Tn8xyt/NxYyPqtB6jj41PZqbS10NqqlTKdHkAI2kJIczo15
+encryptionsalt: v1:nWoIO6TXw8U=:v1:XP7wcNPwr+CMfqCa:QKZDK09NUI1h3JH4DGB3FzGxgbTd8w==
