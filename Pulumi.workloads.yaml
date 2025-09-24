@@ -37,6 +37,11 @@ config:
           sources:
             addresses:
               - 0.0.0.0/0
+        - protocol: tcp
+          port-range: "443"
+          sources:
+            addresses:
+              - 0.0.0.0/0
       egress-rules:
         - protocol: tcp
           port-range: "all"
