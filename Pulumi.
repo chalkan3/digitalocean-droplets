@@ -1,0 +1,76 @@
+salve o script htack -> production
+config:
+  digitalocean-hub-spoke-vpc:do-region: nyc3
+  digitalocean-hub-spoke-vpc:hub-vpc-name: main-hub 
+  digitalocean-hub-spoke-vpc:hub-vpc-cidr: 10.10.0.0/16
+  digitalocean-hub-spoke-vpc:spoke-vpcs:
+    - name: production-spoke 
+      cidr: 10.13.0.0/16
+
+
+
+stack -> workloads 
+config:
+  digitalocean:region: nyc3
+  digitalocean-droplets:vpc-stack-name: organization/digitalocean-hub-spoke-vpc/production 
+  digitalocean-droplets:droplet-region: nyc3
+  digitalocean-droplets:droplets: |
+    - name: do-workload-01 
+      size: s-1vcpu-1gb
+      image: ubuntu-22-04-x64
+      vpc-name: production-spoke
+      tags:
+        - workload 
+        - managed-by-saltstack 
+        - production 
+        - managed-by-pulumi
+      salt-enabled: true #o ip do master é "167.172.27.204" 
+      droplet-bootstrap-script: |
+        #!/bin/bash
+        fazer a instacao do frps eu quero sem token 
+        documentacao: https://github.com/fatedier/frp
+      ingress-rules:
+        - protocol: tcp
+          port-range: "22"
+          sources:
+            addresses:
+              - 0.0.0.0/0
+      egress-rules:
+        - protocol: tcp
+          port-range: "all"
+          destinations:
+            addresses:
+              - 0.0.0.0/0
+
+# /srv/pillar/do-workload-01.sls
+
+users:
+  chalkan3:
+    fullname: "Igor Rodrigues"
+    uid: 1001
+    gid: 1001
+    groups:
+      - sudo
+    shell: /bin/zsh
+    generate_ssh_key: True
+    sudo: True
+    state: present
+
+gitlab:
+  config:
+    external_url: "http://138.197.88.209"
+    data_dir: /var/opt/gitlab
+
+storage:
+  disks:
+    /var/opt/gitlab:
+      device: /dev/disk/by-id/scsi-0DO_Volume_spoke-vm-droplets-do-workload-01-volume-5803662 
+      fstype: xfs
+
+
+
+
+
+
+
+
